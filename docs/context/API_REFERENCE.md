@@ -45,11 +45,42 @@ if the city is not in the lookup table. Case-insensitive, accent-tolerant.
 
 ## `services/sap_client.py`
 
-### `get_datos_sap(albaran: str, agencia: str) -> dict | None`
-Returns SAP data (CP, peso, etc.) for the given albaran. Currently reads from
-`data/sap_overrides.json`. Returns `None` if not found.
+> **SAP call constraints — read before adding any new SAP call:**
+>
+> 1. **Never call `_fetch_from_sap()` directly.** Always go through `get_albaran_data()`.
+> 2. **Rate limiting is built in:** a minimum delay of `SAP_CALL_DELAY_MS` ms (default 200 ms)
+>    is enforced between consecutive network calls. Do not add extra `time.sleep()` on top.
+> 3. **Results are cached** in `_sap_cache` for the process lifetime. The same albaran is
+>    never fetched twice in a single session — callers can call `get_*` helpers freely.
+> 4. **Batch scenarios:** when enriching a list of albaranes (e.g. audit page load), call
+>    `get_albaran_data()` sequentially in a loop — the rate limiter handles the throttle.
+>    Do NOT use `threading.Thread` or `asyncio.gather` to parallelise SAP calls.
+> 5. **Timeout:** each call uses a 10 s timeout. A failed call returns `None` and is cached
+>    as `None`, so the same broken albaran does not retry during the same session.
 
-Activate real SAP: set `SAP_ENABLED=true` in `.env` and implement `_fetch_from_sap()`.
+### `get_albaran_data(albaran: str, agencia: str) -> dict | None`
+Returns all SAP fields for the albaran or `None`. Checks `_sap_cache` first; if not
+cached, calls `_fetch_from_sap()` (rate-limited). Falls back to `data/sap_overrides.json`
+when `SAP_ENABLED` is false or the call fails.
+
+Fields returned: `cp`, `peso`, `poblacion`, `provincia`, `bultos`, `importe`, `reembolso`,
+`pais`, `nombre_dest`.
+
+### `get_cp(albaran, agencia) -> str | None`
+Delivery postal code. Shorthand over `get_albaran_data()`.
+
+### `get_peso(albaran, agencia) -> float | None`
+Real shipment weight in kg. More reliable than the invoice weight for Molartrans.
+
+### `get_bultos(albaran, agencia) -> int | None`
+Package count. Validates/overrides what the invoice reports (used in DHL tariff).
+
+**Env vars:**
+| Variable | Default | Purpose |
+|---|---|---|
+| `SAP_ENABLED` | `false` | Enable real SOAP calls |
+| `SAP_ENDPOINT` | — | SOAP service URL (no credentials needed) |
+| `SAP_CALL_DELAY_MS` | `200` | Min ms between consecutive SAP network calls |
 
 ---
 
