@@ -1037,6 +1037,20 @@ export function registrarApi(app: FastifyInstance) {
     return { ok: true, ejemplo: x };
   });
 
+  // Rechazo en lote: recibe una lista de IDs y los marca como rechazados.
+  app.post<{ Body: { ids?: string[] } }>("/ai/training-examples/bulk-reject", async (req, reply) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body!.ids! : [];
+    if (!ids.length) return reply.code(400).send({ error: "sin ids" });
+    let rechazados = 0;
+    for (const id of ids) {
+      const e = await store.getTrainingExample(id);
+      if (!e) continue;
+      await store.updateTrainingExample(e.id, { status: "rechazado", approvedForTraining: false });
+      rechazados++;
+    }
+    return { ok: true, rechazados };
+  });
+
   app.post<{ Params: { id: string }; Body: { texto?: string } }>(
     "/ai/training-examples/:id/edit",
     async (req, reply) => {

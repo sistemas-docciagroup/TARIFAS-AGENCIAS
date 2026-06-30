@@ -337,7 +337,7 @@
 
         <!-- Barra de filtros -->
         <div style="border-bottom:1px solid #1e2330;background:#12151e;flex-shrink:0">
-          <div style="padding:6px 16px;display:flex;gap:6px;align-items:flex-end;overflow-x:auto;min-height:44px;white-space:nowrap">
+          <div style="padding:6px 16px;display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
 
             <div style="flex-shrink:0"><div class="k" style="margin-bottom:2px;font-size:10px">Búsqueda</div>
               <input id="kb-filter-busq" placeholder="título, descripción..." oninput="filtrarKb()" style="font-size:11px;padding:3px 8px;width:140px" />
@@ -677,6 +677,11 @@
               <span id="tr-aprobados-count" style="font-size:11px;color:var(--muted)"></span>
               <button id="btn-refresh-comments" class="b" onclick="refreshTodosComentarios(this)" style="font-size:11px;padding:4px 14px;background:#1e293b;border:1px solid #334155">↺ Actualizar comentarios</button>
               <button id="btn-score-all" class="b" onclick="puntuarTodos(this)" style="font-size:11px;padding:4px 14px;background:#1e293b;border:1px solid #334155">★ Puntuar calidad</button>
+              <span style="display:inline-flex;align-items:center;gap:5px;background:#1a1015;border:1px solid #3f1f1f;border-radius:6px;padding:2px 6px">
+                <span style="font-size:10px;color:#fca5a5">Rechazar calidad &lt;</span>
+                <input id="tr-umbral-rechazo" type="number" min="0" max="100" value="35" style="width:46px;font-size:11px;padding:3px 5px;background:#0d1017;border:1px solid #3f1f1f;color:#fca5a5;border-radius:4px" />
+                <button id="btn-rechazar-calidad" class="b re" onclick="rechazarPorCalidad(this)" style="font-size:11px;padding:4px 12px">✗ Rechazar lote</button>
+              </span>
               <button class="b ap" onclick="exportarDataset()" style="font-size:11px;padding:4px 14px">⬇ Exportar aprobados (JSONL)</button>
             </div>
           </div>
@@ -1134,7 +1139,8 @@
         setMs('tr-agente', Object.entries(agentesMap).map(([id,n]) => ({ value: id, label: n })), 'filtrarTraining()');
       }
 
-      function filtrarTraining() {
+      // Aplica todos los filtros activos y devuelve el subconjunto de trainingCache.
+      function trainingFiltrado() {
         const busq    = (document.getElementById('tr-busqueda').value || '').toLowerCase();
         const status  = getMs('tr-status');
         const tStatus = getMs('tr-ticket-status');
@@ -1168,6 +1174,11 @@
           const orig = trainingOrigenCache[e.sourceTicketId] || {};
           return calidad.includes(orig.calidadLabel || 'sin-puntuar');
         });
+        return filtrados;
+      }
+
+      function filtrarTraining() {
+        const filtrados = trainingFiltrado();
 
         const pendientes  = filtrados.filter(e => e.status === 'pendiente' || e.status === 'necesita_edicion');
         const procesados  = filtrados.filter(e => e.status === 'aprobado'  || e.status === 'rechazado');
@@ -1680,6 +1691,44 @@
       async function training(id, accion) {
         await fetch('/ai/training-examples/' + id + '/' + accion, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
         await cargarTraining();
+      }
+
+      // Rechaza en masa los ejemplos PENDIENTES (según filtros actuales) cuya calidad esté por debajo del umbral.
+      async function rechazarPorCalidad(btn) {
+        const umbral = parseInt(document.getElementById('tr-umbral-rechazo').value, 10);
+        if (isNaN(umbral)) { alert('Introduce un umbral de calidad válido (0-100).'); return; }
+
+        // Solo pendientes que cumplen los filtros activos y tienen score numérico por debajo del umbral.
+        const candidatos = trainingFiltrado().filter(e => {
+          if (e.status !== 'pendiente' && e.status !== 'necesita_edicion') return false;
+          const orig = trainingOrigenCache[e.sourceTicketId] || {};
+          return typeof orig.calidadScore === 'number' && orig.calidadScore < umbral;
+        });
+
+        if (!candidatos.length) {
+          alert('No hay ejemplos pendientes con calidad < ' + umbral + ' entre los filtros actuales.\n(Los ejemplos sin puntuar se ignoran — usa "★ Puntuar calidad" primero.)');
+          return;
+        }
+        if (!confirm('Se van a RECHAZAR ' + candidatos.length + ' ejemplo(s) con calidad por debajo de ' + umbral + '.\n\nEsta acción respeta los filtros activos. ¿Continuar?')) return;
+
+        const orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Rechazando ' + candidatos.length + '...';
+        try {
+          const r = await fetch('/ai/training-examples/bulk-reject', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: candidatos.map(e => e.id) }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || 'error en el servidor');
+          await cargarTraining();
+          alert('✓ ' + (d.rechazados ?? 0) + ' ejemplo(s) rechazados.');
+        } catch (e) {
+          alert('Error: ' + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
       }
 
       // ---- CHATBOX ----

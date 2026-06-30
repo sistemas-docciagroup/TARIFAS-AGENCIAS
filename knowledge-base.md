@@ -6,13 +6,6 @@
 
 ## GLOBAL
 
-### Garantia estandar de platos de ducha
-**Tipo:** garantia | **Categoría:** Garantías | **Acceso:** clientes | **Estado:** activo
-
-Los platos de ducha de resina tienen una garantia de 10 años contra defectos de fabricacion. La garantia cubre delaminacion, fisuras estructurales y defectos de color de origen. No cubre danos por mala instalacion, productos de limpieza abrasivos ni golpes. Para tramitar una garantia se necesita: numero de pedido, foto del defecto y fecha de compra.
-
----
-
 ### Plazos de entrega y logistica
 **Tipo:** faq | **Categoría:** Logística | **Acceso:** clientes | **Estado:** activo
 
@@ -3561,13 +3554,6 @@ FORMULA DE PRECIO FINAL: Precio final = Precio base + Incrementos de acabado/vid
 
 ## BELLOBATH
 
-### Garantia y devoluciones Bellobath
-**Tipo:** garantia | **Categoría:** Garantías | **Acceso:** bellobath | **Estado:** activo
-
-Bellobath ofrece 2 años de garantia legal en todos sus productos. Las devoluciones sin defecto se aceptan en los 30 dias siguientes a la recepcion, el producto debe estar sin usar y en su embalaje original. Los gastos de devolucion corren a cargo del cliente salvo que el producto llegue defectuoso. Para tramitar una devolucion o garantia: accede a tu cuenta en bellobath.com > 'Mis pedidos' > 'Solicitar devolucion', o escribe a devoluciones@bellobath.com con tu numero de pedido y fotos del estado del producto.
-
----
-
 ### Envios y plazos Bellobath
 **Tipo:** faq | **Categoría:** Bellobath | **Acceso:** bellobath | **Estado:** activo
 
@@ -3652,31 +3638,22 @@ Puedes comprar en bellobath.com sin necesidad de cuenta, pero recomendamos regis
 
 ---
 
-### Garantia y devoluciones Bellobath
-**Tipo:** garantia | **Categoría:** Garantías | **Acceso:** bellobath | **Estado:** activo
+## CASOS_APRENDIDOS
 
-Bellobath ofrece 2 años de garantia legal en todos sus productos. Las devoluciones sin defecto se aceptan en los 30 dias siguientes a la recepcion, el producto debe estar sin usar y en su embalaje original. Los gastos de devolucion corren a cargo del cliente salvo que el producto llegue defectuoso. Para tramitar una devolucion o garantia: accede a tu cuenta en bellobath.com > 'Mis pedidos' > 'Solicitar devolucion', o escribe a devoluciones@bellobath.com con tu numero de pedido y fotos del estado del producto.
+### Regla aprendida: Siempre adjuntar documentos relevantes al responder consultas de carga o pedidos
+**Tipo:** caso_aprendido | **Categoría:** Sin clasificar | **Acceso:** interno | **Estado:** pending_review
 
----
+*Regla aprendida de un ejemplo de entrenamiento aprobado.*
 
-### Envios y plazos Bellobath
-**Tipo:** faq | **Categoría:** Bellobath | **Acceso:** bellobath | **Estado:** activo
+REGLA APRENDIDA
 
-Bellobath envia a toda la Peninsula Iberica. Plazo estandar: 3-5 dias laborables. Envio gratuito en pedidos superiores a 99€. Para pedidos menores, el coste de envio se calcula en el checkout. Los platos de ducha viajan en embalaje reforzado especial. Recibirás un email con el numero de seguimiento cuando el pedido salga de almacen. Si el pedido llega danado, fotografialo ANTES de firmar el albaran y contacta con nosotros en las primeras 24h.
+Siempre adjuntar documentos relevantes al responder consultas de carga o pedidos.
 
----
+Contexto original:
+El cliente se pone en contacto para obtener detalles sobre la carga de su pedido programada para el día 22/05/26.
 
-### Catalogo y medidas Bellobath
-**Tipo:** catalogo | **Categoría:** Bellobath | **Acceso:** bellobath | **Estado:** activo
-
-Bellobath dispone de platos de ducha en resina en los siguientes formatos estandar: 70x70, 80x80, 90x90, 70x100, 80x100, 80x120, 90x120, 70x120. Acabados disponibles: liso blanco, antideslizante blanco, liso gris, liso negro. Para medidas especiales o colores personalizados, usa el configurador en bellobath.com/personalizado o escribe a pedidos@bellobath.com. Plazo de fabricacion para medidas especiales: 10-15 dias laborables.
-
----
-
-### Ayuda con el pedido online Bellobath
-**Tipo:** procedimiento | **Categoría:** Bellobath | **Acceso:** bellobath | **Estado:** activo
-
-Puedes comprar en bellobath.com sin necesidad de cuenta, pero recomendamos registrarte para seguir tus pedidos. Metodos de pago aceptados: tarjeta, Bizum, transferencia bancaria y PayPal. Si tienes un codigo de descuento, introdúcelo en el campo 'Cupon' durante el checkout, antes de confirmar el pago. Para facturas con datos de empresa, indica el CIF/NIF en la seccion de facturacion. Las facturas se envian automaticamente por email al confirmar el pedido.
+Respuesta de referencia:
+Se le proporciona la información de la carga de manera rápida y se adjuntan los ficheros necesarios.
 
 ---
 
