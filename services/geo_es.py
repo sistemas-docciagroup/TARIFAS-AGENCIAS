@@ -10,15 +10,7 @@ facturas Doccia. Lo no cubierto se marca para revisión y se puede ampliar aquí
 (CIUDAD_PROVINCIA) o detectarse como internacional (PAIS_EXTRANJERO).
 """
 
-def _norm(s: str) -> str:
-    s = (s or "").strip().lower()
-    repl = {"á": "a", "à": "a", "ä": "a", "é": "e", "è": "e", "í": "i", "ó": "o",
-            "ò": "o", "ö": "o", "ú": "u", "ü": "u", "ñ": "n", "ç": "c",
-            "�": "", "�": ""}
-    for a, b in repl.items():
-        s = s.replace(a, b)
-    # colapsar espacios
-    return " ".join(s.split())
+from normalizer import normalize_str as _norm
 
 
 # ── Provincias (clave normalizada como en el mapa de la tarifa) ───────────────

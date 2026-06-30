@@ -77,3 +77,20 @@ def normalize_int(value) -> int | None:
         return int(float(str(value).strip()))
     except (ValueError, TypeError):
         return None
+
+
+_ACCENT_MAP = {
+    ord("á"): "a", ord("à"): "a", ord("ä"): "a",
+    ord("é"): "e", ord("è"): "e",
+    ord("í"): "i",
+    ord("ó"): "o", ord("ò"): "o", ord("ö"): "o",
+    ord("ú"): "u", ord("ü"): "u",
+    ord("ñ"): "n",
+    ord("ç"): "c",
+    ord("�"): None,  # drop Unicode replacement characters (bad encoding)
+}
+
+
+def normalize_str(s) -> str:
+    """Lowercase, strip accents, collapse whitespace. For accent-insensitive comparisons."""
+    return " ".join((s or "").strip().lower().translate(_ACCENT_MAP).split())

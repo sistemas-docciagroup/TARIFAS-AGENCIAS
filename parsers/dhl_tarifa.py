@@ -100,11 +100,7 @@ def parse_dhl_tariff(path: str | Path) -> dict | None:
     }
 
 
-def _norm(s: str) -> str:
-    s = str(s).strip().lower()
-    for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"), ("ñ", "n")):
-        s = s.replace(a, b)
-    return s
+from normalizer import normalize_str as _norm
 
 
 def _extract_zona_map(df) -> dict:
