@@ -32,6 +32,14 @@ def calculate_expected_amount(tarifa: Tarifa, line_data: dict[str, Any]) -> dict
         return {"importe_calculado": None, "estado": "TARIFA_DUDOSA"}
 
     # ── Tarifa de escalados de Molartrans (material + kg + provincia) ─────────
+    if reglas.get("tipo_tarifa") in ("molartrans_escalados", "molartrans_nacional"):
+        if line_data.get("albaran") and line_data.get("peso_sap") is None:
+            from services.sap_client import get_peso
+            sap_peso = get_peso(line_data.get("albaran"), "Molartrans")
+            if sap_peso:
+                line_data = {**line_data, "peso_sap": sap_peso,
+                             "tramo_kg": line_data.get("tramo_kg") or sap_peso}
+
     if reglas.get("tipo_tarifa") == "molartrans_escalados":
         return _molartrans_escalado(reglas, line_data)
 

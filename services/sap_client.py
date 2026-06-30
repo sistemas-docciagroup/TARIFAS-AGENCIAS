@@ -7,13 +7,12 @@ Output: cp, peso_total, poblacion, provincia, bultos, importe, reembolso, pais
 
 Configuration (env vars):
   SAP_ENABLED=true        activate real SAP calls (default: false)
-  SAP_ENDPOINT            SOAP service URL
-  SAP_USER                SAP username
-  SAP_PASSWORD            SAP password
+  SAP_ENDPOINT            SOAP service URL (no credentials — auth is internal to SAP)
 
 Fallback: if SAP is disabled or unavailable, reads data/sap_overrides.json
-  format: {"300012345": {"cp": "28001", "peso": 15.2, ...}}
+  format: {"8770494": {"cp": "07702", "peso": 39.083, ...}}
 """
+import html
 import os
 import json
 import defusedxml.ElementTree as ET
@@ -54,7 +53,7 @@ def _fetch_from_sap(albaran: str, agencia: str) -> dict | None:
     if not endpoint:
         return None
 
-    body = _SOAP_TEMPLATE.format(albaran=albaran.zfill(10))
+    body = _SOAP_TEMPLATE.format(albaran=html.escape(albaran.zfill(10)))
     headers = {
         "Content-Type": "text/xml; charset=utf-8",
         "SOAPAction": "Z_ALBARAN_PESOS",
