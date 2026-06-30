@@ -1,24 +1,42 @@
 """
-Cliente SAP (stub) — punto único para enriquecer un albarán con datos de SAP.
+SAP R3 SOAP client — single entry point to enrich an albaran with SAP data.
 
-Idea: enviamos el nº de albarán Doccia y SAP nos devuelve los datos que la
-auditoría necesita según la agencia (en DHL: el CÓDIGO POSTAL de destino, que
-permite resolver la zona de forma exacta, sin depender del nombre de ciudad).
+Operation: Z_ALBARAN_PESOS
+Input:  I_ALBARAN (albaran number, max 10 chars)
+Output: cp, peso_total, poblacion, provincia, bultos, importe, reembolso, pais
 
-Mientras SAP no está conectado:
-  · Si existe `data/sap_overrides.json` (mapa {albaran: {"cp": "...", ...}}),
-    se usa como fuente manual de datos.
-  · Si no, devuelve None y la auditoría cae al método por ciudad + importe.
+Configuration (env vars):
+  SAP_ENABLED=true        activate real SAP calls (default: false)
+  SAP_ENDPOINT            SOAP service URL
+  SAP_USER                SAP username
+  SAP_PASSWORD            SAP password
 
-Cuando se conecte SAP de verdad, basta implementar `_fetch_from_sap`.
+Fallback: if SAP is disabled or unavailable, reads data/sap_overrides.json
+  format: {"300012345": {"cp": "28001", "peso": 15.2, ...}}
 """
+import os
 import json
+import defusedxml.ElementTree as ET
 from pathlib import Path
 from functools import lru_cache
 
-_OVERRIDES_PATH = Path(__file__).resolve().parent.parent / "data" / "sap_overrides.json"
+import requests
 
-SAP_CONECTADO = False   # cambiar a True cuando _fetch_from_sap esté implementado
+_OVERRIDES_PATH = Path(__file__).resolve().parent.parent / "data" / "sap_overrides.json"
+_SAP_NS = "urn:sap-com:document:sap:rfc:functions"
+
+_SOAP_TEMPLATE = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
+    ' xmlns:urn="urn:sap-com:document:sap:rfc:functions">'
+    "<soapenv:Header/>"
+    "<soapenv:Body>"
+    "<urn:Z_ALBARAN_PESOS>"
+    "<I_ALBARAN>{albaran}</I_ALBARAN>"
+    "</urn:Z_ALBARAN_PESOS>"
+    "</soapenv:Body>"
+    "</soapenv:Envelope>"
+)
 
 
 @lru_cache(maxsize=1)
@@ -32,16 +50,81 @@ def _overrides() -> dict:
 
 
 def _fetch_from_sap(albaran: str, agencia: str) -> dict | None:
-    """TODO: implementar la llamada real a SAP (RFC/OData/servicio web)."""
-    return None
+    endpoint = os.getenv("SAP_ENDPOINT", "").strip()
+    if not endpoint:
+        return None
+
+    body = _SOAP_TEMPLATE.format(albaran=albaran.zfill(10))
+    headers = {
+        "Content-Type": "text/xml; charset=utf-8",
+        "SOAPAction": "Z_ALBARAN_PESOS",
+    }
+    try:
+        resp = requests.post(
+            endpoint,
+            data=body.encode("utf-8"),
+            headers=headers,
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    try:
+        root = ET.fromstring(resp.content)
+    except ET.ParseError:
+        return None
+
+    res = root.find(f".//{{{_SAP_NS}}}Z_ALBARAN_PESOSResponse")
+    if res is None:
+        return None
+
+    # Child elements have no namespace prefix in SAP's response
+    def _text(tag: str) -> str | None:
+        v = (res.findtext(tag) or "").strip()
+        return v or None
+
+    def _float(tag: str) -> float | None:
+        v = _text(tag)
+        try:
+            return float(v) if v else None
+        except ValueError:
+            return None
+
+    def _int(tag: str) -> int | None:
+        v = _text(tag)
+        try:
+            return int(v) if v else None
+        except ValueError:
+            return None
+
+    status = _text("E_RESPUESTA_TXT") or ""
+    if status.upper().startswith("ERROR"):
+        return None
+
+    # SAP returns empty E_ALBARAN when the albaran is not found
+    if not _text("E_ALBARAN"):
+        return None
+
+    return {
+        "cp":          _text("E_CP"),
+        "peso":        _float("E_PESO_TOTAL"),
+        "poblacion":   _text("E_POBLACION"),
+        "provincia":   _text("E_PROVINCIA"),
+        "bultos":      _int("E_TOTAL_BULTOS"),
+        "importe":     _float("E_IMPORTE"),
+        "reembolso":   _float("E_REEMBOLSO"),
+        "pais":        _text("E_PAIS"),
+        "nombre_dest": _text("E_NOMBRE_DEST"),
+    }
 
 
 def get_albaran_data(albaran: str | None, agencia: str) -> dict | None:
-    """Devuelve datos de SAP del albarán (p. ej. {'cp': '45600', ...}) o None."""
+    """Return SAP data for the albaran (all fields) or None."""
     if not albaran:
         return None
     alb = str(albaran).strip()
-    if SAP_CONECTADO:
+    if os.getenv("SAP_ENABLED", "false").lower() == "true":
         data = _fetch_from_sap(alb, agencia)
         if data:
             return data
@@ -49,20 +132,18 @@ def get_albaran_data(albaran: str | None, agencia: str) -> dict | None:
 
 
 def get_cp(albaran: str | None, agencia: str) -> str | None:
-    """Atajo: código postal de destino del albarán según SAP (o None)."""
+    """Delivery postal code from SAP."""
     data = get_albaran_data(albaran, agencia)
-    if data and data.get("cp"):
-        return str(data["cp"]).strip()
-    return None
+    return (data or {}).get("cp")
 
 
 def get_peso(albaran: str | None, agencia: str) -> float | None:
-    """Peso REAL del envío según SAP (o None). El peso de las facturas Molartrans
-    no es fiable; cuando SAP esté conectado, este es el peso bueno para el tramo."""
+    """Real shipment weight from SAP (more reliable than invoice weight)."""
     data = get_albaran_data(albaran, agencia)
-    if data and data.get("peso") is not None:
-        try:
-            return float(data["peso"])
-        except (TypeError, ValueError):
-            return None
-    return None
+    return (data or {}).get("peso")
+
+
+def get_bultos(albaran: str | None, agencia: str) -> int | None:
+    """Package count from SAP (validates/overrides what the invoice reports)."""
+    data = get_albaran_data(albaran, agencia)
+    return (data or {}).get("bultos")
