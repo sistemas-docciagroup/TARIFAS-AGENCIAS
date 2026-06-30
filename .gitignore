@@ -1,6 +1,32 @@
+# ── Node / TS ────────────────────────────────────────────────
 node_modules/
 dist/
+
+# ── Entorno y secretos ───────────────────────────────────────
 .env
+.env.local
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── Datos sensibles y generados (NO subir) ───────────────────
+# Base de datos con facturas/clientes, archivos de tarifas y adjuntos
+data/*.db
+data/*.sqlite
+data/transportes.db
+data/tarifas/
+data/attachments/
 data/*.json
+data/*.migrated
+data/sap_overrides.json
+
+# ── Logs y temporales ────────────────────────────────────────
 *.log
 *.err
+streamlit.out
+streamlit.log
+scratchpad/
