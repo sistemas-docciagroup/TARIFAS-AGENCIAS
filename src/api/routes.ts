@@ -10,6 +10,7 @@ import { generarRespuestaChat, type TurnoChat } from "../ai/generador.js";
 import { registrarMensajeFinal, expirarPendientes } from "../learning/pipeline.js";
 import { lanzarImportacion, analizarJob } from "../learning/importador.js";
 import { detectarYTraducir } from "../ai/traductor.js";
+import { calcularCalidad } from "../learning/calidad-scorer.js";
 import { CANALES } from "../types.js";
 import { extraerTexto, detectarFormato } from "../kb/extractor.js";
 import { sincronizarKbMd } from "../kb/sync-md.js";
@@ -838,6 +839,36 @@ export function registrarApi(app: FastifyInstance) {
 
   app.get("/zendesk/historical-tickets/refresh-all-comments/progress", () => refreshProgress);
 
+  // Puntúa un ticket individual
+  app.post<{ Params: { ticketId: string } }>("/zendesk/historical-tickets/:ticketId/score", async (req, reply) => {
+    const { ticketId } = req.params;
+    const ticket = await store.getHistoricalTicketByZendeskId(ticketId);
+    if (!ticket) return reply.code(404).send({ error: "not found" });
+    const comments = await store.listHistoricalComments(ticketId);
+    const { score, label, razones } = calcularCalidad(ticket, comments);
+    await store.updateHistoricalTicket(ticketId, { calidadScore: score, calidadLabel: label, calidadRazones: razones });
+    return { ok: true, score, label, razones };
+  });
+
+  // Puntúa TODOS los tickets en background
+  let scoreProgress: { total: number; done: number; status: "idle" | "running" | "completed" } = { total: 0, done: 0, status: "idle" };
+  app.get("/zendesk/historical-tickets/score-all/progress", () => scoreProgress);
+  app.post("/zendesk/historical-tickets/score-all", async (_req, reply) => {
+    if (scoreProgress.status === "running") return reply.send({ ok: true, alreadyRunning: true });
+    const tickets = await store.listAllHistoricalTickets();
+    scoreProgress = { total: tickets.length, done: 0, status: "running" };
+    reply.send({ ok: true, total: tickets.length });
+    (async () => {
+      for (const ticket of tickets) {
+        const comments = await store.listHistoricalComments(ticket.zendeskTicketId);
+        const { score, label, razones } = calcularCalidad(ticket, comments);
+        await store.updateHistoricalTicket(ticket.zendeskTicketId, { calidadScore: score, calidadLabel: label, calidadRazones: razones });
+        scoreProgress.done++;
+      }
+      scoreProgress.status = "completed";
+    })().catch(console.error);
+  });
+
   // Re-fetchea comentarios de TODOS los tickets importados en background
   app.post("/zendesk/historical-tickets/refresh-all-comments", async (_req, reply) => {
     if (refreshProgress.status === "running") {
@@ -933,6 +964,10 @@ export function registrarApi(app: FastifyInstance) {
         organizationName: ht.organizationName ?? null,
         // Campos custom clave
         customFields: ht.customFields ?? {},
+        // Calidad
+        calidadScore: ht.calidadScore ?? null,
+        calidadLabel: ht.calidadLabel ?? null,
+        calidadRazones: ht.calidadRazones ?? null,
       };
     }));
     return result;

@@ -370,6 +370,10 @@ export interface HistoricalTicket {
   origenTicketId: string | null;    // ID del ticket padre si es follow_up
   origenTicketTitulo: string | null;// Asunto del ticket padre
   primeraRespuestaEsAgente: boolean; // true si el primer comentario es del agente (contexto incompleto)
+  // Calidad como ejemplo de entrenamiento
+  calidadScore: number | null;       // 0-100
+  calidadLabel: "excelente" | "bueno" | "mejorable" | "descartar" | null;
+  calidadRazones: string[] | null;   // explicación de la puntuación
   createdAt: string;
   solvedAt: string | null;
   updatedAt: string | null;

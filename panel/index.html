@@ -676,6 +676,7 @@
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
               <span id="tr-aprobados-count" style="font-size:11px;color:var(--muted)"></span>
               <button id="btn-refresh-comments" class="b" onclick="refreshTodosComentarios(this)" style="font-size:11px;padding:4px 14px;background:#1e293b;border:1px solid #334155">↺ Actualizar comentarios</button>
+              <button id="btn-score-all" class="b" onclick="puntuarTodos(this)" style="font-size:11px;padding:4px 14px;background:#1e293b;border:1px solid #334155">★ Puntuar calidad</button>
               <button class="b ap" onclick="exportarDataset()" style="font-size:11px;padding:4px 14px">⬇ Exportar aprobados (JSONL)</button>
             </div>
           </div>
@@ -742,6 +743,15 @@
                 <div class="ms-dropdown" id="ms-dd-tr-bueno" style="display:none">
                   <label><input type="checkbox" value="si" onchange="updateMsTrigger('tr-bueno');filtrarTraining()"> Sí</label>
                   <label><input type="checkbox" value="no" onchange="updateMsTrigger('tr-bueno');filtrarTraining()"> No</label>
+                </div></div></div>
+              <div><div class="k" style="margin-bottom:3px;font-size:10px">Calidad</div>
+                <div class="ms-box"><div class="ms-trigger" id="ms-tr-tr-calidad" onclick="toggleMs('tr-calidad',event)">Todas</div>
+                <div class="ms-dropdown" id="ms-dd-tr-calidad" style="display:none">
+                  <label><input type="checkbox" value="excelente" onchange="updateMsTrigger('tr-calidad');filtrarTraining()"> ⭐ Excelente</label>
+                  <label><input type="checkbox" value="bueno" onchange="updateMsTrigger('tr-calidad');filtrarTraining()"> ✅ Bueno</label>
+                  <label><input type="checkbox" value="mejorable" onchange="updateMsTrigger('tr-calidad');filtrarTraining()"> ⚠ Mejorable</label>
+                  <label><input type="checkbox" value="descartar" onchange="updateMsTrigger('tr-calidad');filtrarTraining()"> ✗ Descartar</label>
+                  <label><input type="checkbox" value="sin-puntuar" onchange="updateMsTrigger('tr-calidad');filtrarTraining()"> — Sin puntuar</label>
                 </div></div></div>
               <span id="tr-count" style="font-size:11px;color:#8b93a7;align-self:flex-end;padding-bottom:4px"></span>
             </div>
@@ -1136,6 +1146,7 @@
         const grupo   = getMs('tr-grupo');
         const agente  = getMs('tr-agente');
         const bueno   = getMs('tr-bueno');
+        const calidad = getMs('tr-calidad');
         const jobIds  = getMs('tr-job-filter');
 
         let filtrados = trainingCache;
@@ -1153,6 +1164,10 @@
         if (agente.length) filtrados = filtrados.filter(e => agente.includes(e.ticketAssigneeId));
         if (bueno.includes('si') && !bueno.includes('no'))  filtrados = filtrados.filter(e => e.buenEjemplo);
         if (bueno.includes('no') && !bueno.includes('si'))  filtrados = filtrados.filter(e => !e.buenEjemplo);
+        if (calidad.length) filtrados = filtrados.filter(e => {
+          const orig = trainingOrigenCache[e.sourceTicketId] || {};
+          return calidad.includes(orig.calidadLabel || 'sin-puntuar');
+        });
 
         const pendientes  = filtrados.filter(e => e.status === 'pendiente' || e.status === 'necesita_edicion');
         const procesados  = filtrados.filter(e => e.status === 'aprobado'  || e.status === 'rechazado');
@@ -1239,6 +1254,42 @@
         }
       }
 
+      async function puntuarTodos(btn) {
+        btn.disabled = true;
+        btn.textContent = '★ Puntuando...';
+        const wrap = document.getElementById('refresh-progress-bar-wrap');
+        const fill = document.getElementById('refresh-progress-fill');
+        const text = document.getElementById('refresh-progress-text');
+        if (wrap) { wrap.style.display = 'flex'; }
+        if (fill) { fill.style.width = '0%'; fill.style.background = '#f59e0b'; }
+        if (text) text.textContent = 'Puntuando calidad...';
+        try {
+          await fetch('/zendesk/historical-tickets/score-all', { method: 'POST' });
+          const poll = setInterval(async () => {
+            try {
+              const r = await fetch('/zendesk/historical-tickets/score-all/progress');
+              const d = await r.json();
+              const pct = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
+              if (fill) fill.style.width = pct + '%';
+              if (text) text.textContent = `Puntuando ${d.done}/${d.total} tickets...`;
+              if (d.status === 'completed') {
+                clearInterval(poll);
+                if (fill) fill.style.background = '#10b981';
+                if (text) text.textContent = `✓ ${d.total} tickets puntuados`;
+                btn.disabled = false; btn.textContent = '★ Puntuar calidad';
+                setTimeout(async () => {
+                  if (wrap) wrap.style.display = 'none';
+                  trainingOrigenCache = {};
+                  await cargarTraining();
+                }, 2000);
+              }
+            } catch(e) { clearInterval(poll); }
+          }, 800);
+        } catch(e) {
+          btn.disabled = false; btn.textContent = '★ Puntuar calidad';
+        }
+      }
+
       // Al abrir la pestaña Entrenamiento, comprobar si hay un proceso en marcha
       async function checkRefreshProgress() {
         try {
@@ -1295,6 +1346,18 @@
                   badges += `<span title="Ticket padre: #${orig.origenTicketId}${titulo}" style="background:#1e40af;color:#93c5fd;font-size:10px;padding:2px 7px;border-radius:10px;cursor:help">↩ Derivado de #${orig.origenTicketId}${titulo}</span>`;
                 }
                 if (orig.primeraRespuestaEsAgente) badges += `<span title="El primer mensaje es del agente — puede faltar contexto del cliente" style="background:#92400e;color:#fcd34d;font-size:10px;padding:2px 7px;border-radius:10px;cursor:help">⚠ Contexto incompleto</span>`;
+                // Badge de calidad
+                const CALIDAD_CFG = {
+                  excelente: { bg:'#14532d', color:'#86efac', icon:'⭐' },
+                  bueno:     { bg:'#1e3a5f', color:'#93c5fd', icon:'✅' },
+                  mejorable: { bg:'#78350f', color:'#fcd34d', icon:'⚠' },
+                  descartar: { bg:'#3b0f0f', color:'#fca5a5', icon:'✗' },
+                };
+                if (orig.calidadLabel && CALIDAD_CFG[orig.calidadLabel]) {
+                  const cfg = CALIDAD_CFG[orig.calidadLabel];
+                  const tooltip = (orig.calidadRazones || []).join(' · ').replace(/"/g, '&quot;');
+                  badges += `<span title="${tooltip}" style="background:${cfg.bg};color:${cfg.color};font-size:10px;padding:2px 7px;border-radius:10px;cursor:help">${cfg.icon} ${orig.calidadLabel.charAt(0).toUpperCase()+orig.calidadLabel.slice(1)} (${orig.calidadScore ?? ''})</span>`;
+                }
                 return badges;
               })()}
             </div>
@@ -1353,9 +1416,53 @@
                 return `<div style="margin-top:4px">${parts.join('')}</div>`;
               };
               const IDIOMA_LABEL = { en:'🇬🇧 EN', fr:'🇫🇷 FR', pt:'🇵🇹 PT', de:'🇩🇪 DE', it:'🇮🇹 IT', ca:'🏳 CA', eu:'🏳 EU', gl:'🏳 GL', ar:'🇸🇦 AR', zh:'🇨🇳 ZH', ja:'🇯🇵 JA' };
+              // Elimina ruido típico de emails: firmas, mensajes citados, disclaimers legales
+              const limpiarMensaje = (texto) => {
+                if (!texto) return { limpio: '', recortado: false };
+                const lineas = texto.split('\n');
+                const CORTES = [
+                  // Texto citado
+                  /^>{1,}/,
+                  // Separadores de mensaje reenviado/original
+                  /^-{3,}/,
+                  /^_{4,}/,
+                  /^={4,}/,
+                  // Cabeceras de email citado
+                  /^(De|From)\s*:/i,
+                  /^(Para|To)\s*:/i,
+                  /^(Enviado\s+el|Sent)\s*:/i,
+                  /^(Fecha|Date)\s*:/i,
+                  /^(Asunto|Subject)\s*:/i,
+                  // "El lunes, 25 de junio de 2026, ..." / "On Mon, Jun 25..."
+                  /^(El|On)\s+\w.{0,30}(escribió|wrote)\s*:/i,
+                  /^El\s+\d{1,2}\s+(de\s+)?\w+/i,
+                  /^On\s+\w+,?\s+\w+\s+\d/i,
+                  // Avisos legales y disclaimers
+                  /aviso\s*legal/i,
+                  /nota\s+de\s+confidencialidad/i,
+                  /este\s+(mensaje|correo|e.?mail)\s+(y\s+(sus\s+)?adjuntos|es\s+confidencial)/i,
+                  /this\s+(message|e.?mail)\s+(and\s+(its\s+)?attachments|is\s+confidential)/i,
+                  /la\s+informaci[oó]n\s+contenida\s+en\s+este/i,
+                  /si\s+(usted|you)\s+(no\s+es|are\s+not)\s+el\s+destinatario/i,
+                  /disclaimer/i,
+                  // Firmas típicas (URL de empresa, "Saludos de" + bloque)
+                  /^www\./i,
+                  /^https?:\/\/(www\.)?(doccia|mamparas)/i,
+                ];
+                const resultado = [];
+                for (const linea of lineas) {
+                  if (CORTES.some(re => re.test(linea.trim()))) break;
+                  resultado.push(linea);
+                }
+                // Quitar líneas vacías del final
+                while (resultado.length && !resultado[resultado.length - 1].trim()) resultado.pop();
+                const limpio = resultado.join('\n');
+                return { limpio, recortado: limpio.length < texto.trim().length };
+              };
+
               // Convierte texto con imágenes markdown ![alt](url) en HTML con <img> reales
               // Las URLs de Zendesk se pasan por el proxy local para que el navegador pueda cargarlas
-              const renderBodyText = (texto) => {
+              const _renderTextoHtml = (texto) => {
                 if (!texto) return '';
                 const partes = [];
                 let cursor = 0;
@@ -1376,6 +1483,19 @@
                 }
                 if (cursor < texto.length) partes.push(`<span style="white-space:pre-wrap">${esc(texto.slice(cursor))}</span>`);
                 return `<div style="font-size:12px;line-height:1.55;color:#c9d1d9">${partes.join('')}</div>`;
+              };
+              const renderBodyText = (texto) => {
+                const { limpio, recortado } = limpiarMensaje(texto);
+                const textoMostrar = limpio || texto.trim();
+                let html = _renderTextoHtml(textoMostrar);
+                if (recortado) {
+                  const uid = 'msg_' + Math.random().toString(36).slice(2);
+                  html += `<details style="margin-top:4px">
+                    <summary style="font-size:10px;color:#4b5563;cursor:pointer;user-select:none;list-style:none">▸ Ver mensaje completo (firma / citas)</summary>
+                    <div style="margin-top:4px;padding:6px;background:#0d1117;border-radius:4px;border:1px solid #21262d;opacity:.7">${_renderTextoHtml(texto.trim())}</div>
+                  </details>`;
+                }
+                return html;
               };
               const renderMsgs = (msgs, all=false) => msgs
                 // Mostrar siempre mensajes de clientes (aunque estén marcados como internos en Zendesk)
@@ -1426,12 +1546,13 @@
               // Hilo del ticket padre
               if (parentComments.length) {
                 const pubParent = parentComments.filter(c => c.isPublic);
-                html += `<details open style="margin-bottom:8px">
-                  <summary style="cursor:pointer;font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:6px;list-style:none;display:flex;align-items:center;gap:6px">
+                html += `<details style="margin-bottom:8px">
+                  <summary style="cursor:pointer;font-size:11px;font-weight:600;color:#f59e0b;padding:6px 8px;background:#1c1408;border:1px solid #78350f;border-radius:6px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none">
+                    <span style="opacity:.6">▶</span>
                     <span style="background:#78350f;color:#fcd34d;font-size:10px;padding:1px 6px;border-radius:8px">↩ Ticket padre #${esc(parentId)}</span>
                     <span style="color:var(--muted);font-weight:400">${pubParent.length} mensajes previos</span>
                   </summary>
-                  <div style="border-left:3px solid #78350f;padding-left:10px;margin-bottom:4px">
+                  <div style="border-left:3px solid #78350f;padding-left:10px;margin-top:6px;margin-bottom:4px">
                     ${renderMsgs(parentComments)}
                   </div>
                   <div style="border-top:1px dashed #334155;margin:8px 0 8px;font-size:10px;color:var(--muted);text-align:center">— continúa en ticket #${esc(e.sourceTicketId)} —</div>
@@ -1440,8 +1561,14 @@
 
               // Conversación del ticket actual
               if (pubComments.length) {
-                html += `<div class="k" style="margin-bottom:6px">Conversación <span style="font-weight:400;color:var(--muted)">(${pubComments.length} mensajes)</span></div>
-                  ${renderMsgs(comments)}`;
+                html += `<details style="margin-bottom:4px">
+                  <summary style="cursor:pointer;font-size:11px;font-weight:600;color:#c9d1d9;padding:6px 8px;background:#0d1117;border:1px solid #21262d;border-radius:6px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none">
+                    <span style="opacity:.6">▶</span>
+                    <span>Conversación</span>
+                    <span style="font-weight:400;color:var(--muted)">${pubComments.length} mensaje${pubComments.length !== 1 ? 's' : ''}</span>
+                  </summary>
+                  <div style="margin-top:6px">${renderMsgs(comments)}</div>
+                </details>`;
               } else if (!parentComments.length) {
                 html += `<div style="padding:8px;background:#111827;border-radius:6px;font-size:11px;color:var(--muted)">Sin conversación importada. Pulsa ↺ para descargarla.</div>`;
               }

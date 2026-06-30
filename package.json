@@ -4,7 +4,8 @@
   "description": "Doccia AI — empleado virtual de atención al cliente integrado con Zendesk (motor OpenAI).",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --ignore \"panel/**\" --ignore \"data/**\" src/server.ts",
+    "serve": "tsx src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
