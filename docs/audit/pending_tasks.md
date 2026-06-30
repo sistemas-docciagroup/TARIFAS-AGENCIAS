@@ -12,7 +12,7 @@ same directory. This checklist summarises the pending tasks for later pickup.
 - [x] **3.** Add `openai` to `requirements.txt` — used in `services/ai_verifier.py:45` but not declared. *(done 2026-06-30)*
 - [x] **4.** Consolidate `_norm()` into `normalizer.py` and remove the 3 copies in `services/geo_es.py:13`, `parsers/dhl_tarifa.py:103`. *(done 2026-06-30 — molartrans uses _norm_zona, different function, left as-is)*
 - [x] **5.** Convert `SAP_CONECTADO = False` (`services/sap_client.py:21`) to env var `SAP_ENABLED`. *(done 2026-06-30)*
-- [ ] **6.** Fix or remove `ecosystem.config.cjs` — hardcodes `C:/Users/alfonsop/` (another machine).
+- [x] **6.** Fix or remove `ecosystem.config.cjs` — hardcodes `C:/Users/alfonsop/` (another machine). *(done 2026-06-30 — replaced with cwd: ".")*
 
 ## Medium Tasks (half day each)
 

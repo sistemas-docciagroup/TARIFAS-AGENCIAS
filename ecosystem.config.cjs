@@ -4,7 +4,7 @@ module.exports = {
       name: "doccia-ai",
       script: "node_modules/tsx/dist/cli.mjs",
       args: "src/server.ts",
-      cwd: "C:/Users/alfonsop/Documents/doccia-ai",
+      cwd: ".",
       watch: false,
       autorestart: true,
       max_restarts: 10,
