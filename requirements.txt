@@ -8,3 +8,4 @@ plotly>=5.22.0
 python-dotenv>=1.0.0
 requests>=2.32.0
 defusedxml>=0.7.1
+openai>=1.30.0
