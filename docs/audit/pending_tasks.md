@@ -7,11 +7,11 @@ same directory. This checklist summarises the pending tasks for later pickup.
 
 ## Quick Wins (< 1 hour each)
 
-- [ ] **1.** Remove `pytesseract` and `Pillow` from `requirements.txt` — never imported anywhere.
+- [x] **1.** Remove `pytesseract` and `Pillow` from `requirements.txt` — never imported anywhere. *(done 2026-06-30)*
 - [ ] **2.** Remove `anthropic` from `requirements.txt` — never imported; code uses `openai` instead.
 - [ ] **3.** Add `openai` to `requirements.txt` — used in `services/ai_verifier.py:45` but not declared.
 - [ ] **4.** Consolidate `_norm()` into `normalizer.py` and remove the 3 copies in `services/geo_es.py:13`, `parsers/dhl_tarifa.py:103`, `parsers/molartrans_tarifa.py:52`.
-- [ ] **5.** Convert `SAP_CONECTADO = False` (`services/sap_client.py:21`) to env var `SAP_ENABLED`.
+- [x] **5.** Convert `SAP_CONECTADO = False` (`services/sap_client.py:21`) to env var `SAP_ENABLED`. *(done 2026-06-30)*
 - [ ] **6.** Fix or remove `ecosystem.config.cjs` — hardcodes `C:/Users/alfonsop/` (another machine).
 
 ## Medium Tasks (half day each)
