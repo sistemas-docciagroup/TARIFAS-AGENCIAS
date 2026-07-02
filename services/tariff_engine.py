@@ -36,9 +36,10 @@ def calculate_expected_amount(tarifa: Tarifa, line_data: dict[str, Any]) -> dict
         if line_data.get("albaran") and line_data.get("peso_sap") is None:
             from services.sap_client import get_peso
             sap_peso = get_peso(line_data.get("albaran"), "Molartrans")
-            if sap_peso:
-                line_data = {**line_data, "peso_sap": sap_peso,
-                             "tramo_kg": line_data.get("tramo_kg") or sap_peso}
+            peso_por_bulto = sap_peso if (sap_peso is not None and sap_peso > 0) else 20
+            bultos = line_data.get("bultos") or 1
+            effective = peso_por_bulto * bultos
+            line_data = {**line_data, "peso_sap": effective, "tramo_kg": effective}
 
     if reglas.get("tipo_tarifa") == "molartrans_escalados":
         return _molartrans_escalado(reglas, line_data)
@@ -383,5 +384,10 @@ def compare_amounts(importe_facturado: float, importe_calculado: float | None, t
         return {"diferencia": None, "porcentaje": None, "estado": "SIN_TARIFA"}
     diferencia = round(importe_facturado - importe_calculado, 4)
     porcentaje = round(diferencia / importe_calculado * 100, 2) if importe_calculado else 0
-    estado = "TARIFA_OK" if abs(porcentaje) <= tolerancia_pct else "DIFERENCIA_TARIFA"
+    if abs(porcentaje) <= tolerancia_pct:
+        estado = "TARIFA_OK"
+    elif diferencia > 0:
+        estado = "DIFERENCIA_CONTRA"   # nos cobraron de más
+    else:
+        estado = "DIFERENCIA_FAVOR"    # nos cobraron de menos
     return {"diferencia": diferencia, "porcentaje": porcentaje, "estado": estado}

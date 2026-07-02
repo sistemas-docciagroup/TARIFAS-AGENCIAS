@@ -6,6 +6,9 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from dotenv import load_dotenv
+load_dotenv(_ROOT / ".env", override=True)
+
 import streamlit as st
 
 st.set_page_config(
@@ -59,9 +62,10 @@ PAGES = {
     "📋  Resultados": "resultados",
     "🔍  Auditoría": "auditoria",
     "💰  Tarifas": "tarifas",
+    "📊  Comparador de tarifas": "comparador",
     "⚙️  Reglas de proceso": "reglas",
     "🧮  Simulador": "simulador",
-    "📊  Dashboard": "dashboard",
+    "📈  Dashboard": "dashboard",
 }
 
 with st.sidebar:
@@ -85,6 +89,8 @@ try:
         from views.auditoria import render
     elif page == "tarifas":
         from views.tarifas import render
+    elif page == "comparador":
+        from views.comparador import render
     elif page == "reglas":
         from views.reglas import render
     elif page == "simulador":

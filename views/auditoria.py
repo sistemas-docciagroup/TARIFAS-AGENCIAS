@@ -57,8 +57,8 @@ def _line_audit_data(l: Albaran) -> dict:
     # manda y se usa como tramo → la auditoría es objetiva, sin estimar por importe.
     from services.sap_client import get_peso
     peso_sap = get_peso(l.albaran_doccia, l.agencia)
-    if peso_sap is not None:
-        tramo_kg = peso_sap
+    peso_por_bulto = peso_sap if (peso_sap is not None and peso_sap > 0) else 20
+    tramo_kg = peso_por_bulto * (l.bultos or 1)
 
     return {
         "material":        material,
@@ -76,14 +76,16 @@ def _line_audit_data(l: Albaran) -> dict:
     }
 
 ESTADO_BG = {
-    "TARIFA_OK":         "#f0fdf4",
-    "DIFERENCIA_TARIFA": "#fff7ed",
-    "SIN_TARIFA":        "#fef9c3",
+    "TARIFA_OK":          "#f0fdf4",
+    "DIFERENCIA_CONTRA":  "#fef2f2",   # cobrado de más → rojo suave
+    "DIFERENCIA_FAVOR":   "#fff7ed",   # cobrado de menos → naranja suave
+    "SIN_TARIFA":         "#fef9c3",
 }
 ESTADO_ICON = {
-    "TARIFA_OK":         "✅",
-    "DIFERENCIA_TARIFA": "⚠️",
-    "SIN_TARIFA":        "❓",
+    "TARIFA_OK":          "✅",
+    "DIFERENCIA_CONTRA":  "🔴",        # nos cobraron de más
+    "DIFERENCIA_FAVOR":   "🟡",        # nos cobraron de menos
+    "SIN_TARIFA":         "❓",
 }
 
 
@@ -241,7 +243,9 @@ def render():
         dif_neta   = portes_aud - total_tar
         total_fac_full = sum(l.total_facturado or 0 for l in lineas)  # contexto
         n_ok       = sum(1 for l in lineas if l.estado_tarifa == "TARIFA_OK")
-        n_dif      = sum(1 for l in lineas if l.estado_tarifa == "DIFERENCIA_TARIFA")
+        n_contra   = sum(1 for l in lineas if l.estado_tarifa == "DIFERENCIA_CONTRA")
+        n_favor    = sum(1 for l in lineas if l.estado_tarifa == "DIFERENCIA_FAVOR")
+        n_dif      = n_contra + n_favor
         n_sin      = sum(1 for l in lineas if l.estado_tarifa == "SIN_TARIFA")
         pct_ok     = f"{n_ok / len(lineas) * 100:.1f}%" if lineas else "—"
 
@@ -266,12 +270,16 @@ def render():
         )
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        c5, c6, c7, _ = st.columns([1, 1, 1, 1])
+        c5, c6, c7, c8 = st.columns(4)
         c5.markdown(_kpi("✅ Conformes", f"{n_ok:,}", sub=pct_ok,
                          bg="#f0fdf4", border="#86efac", color="#16a34a"), unsafe_allow_html=True)
-        c6.markdown(_kpi("⚠️ Con diferencia", f"{n_dif:,}",
+        c6.markdown(_kpi("🔴 Cobrado de más", f"{n_contra:,}",
+                         sub="facturado > tarifa",
+                         bg="#fef2f2", border="#fca5a5", color="#dc2626"), unsafe_allow_html=True)
+        c7.markdown(_kpi("🟡 Cobrado de menos", f"{n_favor:,}",
+                         sub="facturado < tarifa",
                          bg="#fff7ed", border="#fdba74", color="#c2410c"), unsafe_allow_html=True)
-        c7.markdown(_kpi("❓ Sin regla de tarifa", f"{n_sin:,}",
+        c8.markdown(_kpi("❓ Sin regla de tarifa", f"{n_sin:,}",
                          bg="#fef9c3", border="#fde047", color="#854d0e"), unsafe_allow_html=True)
 
         if n_sin == len(lineas) and total_tar == 0:
@@ -466,15 +474,16 @@ def render():
         # ── Filtro por estado ─────────────────────────────────────────────────
         filtro = st.radio(
             "Mostrar",
-            ["Todos", "✅ Conformes", "⚠️ Con diferencia", "❓ Sin tarifa"],
+            ["Todos", "✅ Conformes", "🔴 Cobrado de más", "🟡 Cobrado de menos", "❓ Sin tarifa"],
             horizontal=True, key="aud_filtro", label_visibility="collapsed",
         )
 
         # ── Tabla ─────────────────────────────────────────────────────────────
         MAP_FILTRO = {
-            "✅ Conformes":     "TARIFA_OK",
-            "⚠️ Con diferencia": "DIFERENCIA_TARIFA",
-            "❓ Sin tarifa":    "SIN_TARIFA",
+            "✅ Conformes":       "TARIFA_OK",
+            "🔴 Cobrado de más":  "DIFERENCIA_CONTRA",
+            "🟡 Cobrado de menos": "DIFERENCIA_FAVOR",
+            "❓ Sin tarifa":      "SIN_TARIFA",
         }
         estado_filtro = MAP_FILTRO.get(filtro)
 
@@ -484,10 +493,12 @@ def render():
         hay_reexp  = any(x.reexpedicion for x in lineas)
 
         rows = []
+        lineas_filtradas = []
         for l in lineas:
             est = l.estado_tarifa or "SIN_TARIFA"
             if estado_filtro and est != estado_filtro:
                 continue
+            lineas_filtradas.append(l)
             imp_fac = l.total_facturado or 0
             imp_tar = l.importe_tarifa
             dif     = l.diferencia_importe
@@ -596,17 +607,21 @@ def render():
                 unsafe_allow_html=True,
             )
 
-            # Exportar
+            # Exportar (solo las filas visibles según el filtro activo)
+            sufijo = estado_filtro.lower() if estado_filtro else "todos"
+            fname  = f"auditoria_{factura_sel}_{sufijo}.xlsx"
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             col_exp, _ = st.columns([1, 4])
             with col_exp:
-                if st.button("📥 Exportar Excel", use_container_width=True):
-                    clean = [{k: v for k, v in l.__dict__.items() if not k.startswith("_")}
-                             for l in lineas]
-                    path = export_excel(clean, filename=f"auditoria_{factura_sel}.xlsx")
-                    with open(path, "rb") as fh:
-                        st.download_button("⬇️ Descargar", fh.read(), file_name=path.name,
-                                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                           use_container_width=True)
+                clean = [{k: v for k, v in l.__dict__.items() if not k.startswith("_")}
+                         for l in lineas_filtradas]
+                path  = export_excel(clean, filename=fname)
+                with open(path, "rb") as fh:
+                    st.download_button(
+                        f"📥 Exportar Excel ({len(lineas_filtradas):,} filas)",
+                        fh.read(), file_name=fname,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
     finally:
         db.close()
